@@ -112,6 +112,16 @@ function App() {
     );
   }, []);
 
+  // Handle batch rename with common name
+  const handleBatchRename = useCallback((baseName: string) => {
+    setCroppedImages((prev) =>
+      prev.map((img, idx) => ({
+        ...img,
+        name: `${baseName}_${idx + 1}`,
+      }))
+    );
+  }, []);
+
   // Handle image rotation (90° increments)
   const handleImageRotate = useCallback((id: string, direction: "left" | "right") => {
     const image = croppedImages.find((img) => img.id === id);
@@ -275,7 +285,7 @@ function App() {
         </header>
 
         {/* Main layout */}
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[250px_1fr_250px] gap-4 min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[250px_1fr_320px] gap-4 min-h-0">
           {/* Left panel - Settings */}
           <div className="space-y-4 overflow-y-auto">
             <FileUpload onUpload={handleUpload} disabled={isUploading} />
@@ -323,6 +333,7 @@ function App() {
               onExport={handleExport}
               onExportLocal={handleExportLocal}
               onNameChange={handleImageNameChange}
+              onBatchRename={handleBatchRename}
               onRotate={handleImageRotate}
               isExporting={isExporting}
               outputDirectory={outputDirectory}
