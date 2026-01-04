@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.png" alt="ScanSplitter Logo" width="200">
+</p>
+
 # ScanSplitter
 
 Automatically detect, split, and rotate multiple photos from scanned images.
