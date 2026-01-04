@@ -17,12 +17,32 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # UI command
-    ui_parser = subparsers.add_parser("ui", help="Launch the web interface")
+    # UI command (Gradio - legacy)
+    ui_parser = subparsers.add_parser("ui", help="Launch the Gradio web interface (legacy)")
     ui_parser.add_argument(
         "--share",
         action="store_true",
         help="Create a public shareable link",
+    )
+
+    # API command (new FastAPI backend)
+    api_parser = subparsers.add_parser("api", help="Launch the FastAPI backend server")
+    api_parser.add_argument(
+        "--host",
+        type=str,
+        default="127.0.0.1",
+        help="Host to bind to (default: 127.0.0.1)",
+    )
+    api_parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="Port to bind to (default: 8000)",
+    )
+    api_parser.add_argument(
+        "--reload",
+        action="store_true",
+        help="Enable auto-reload for development",
     )
 
     # Process command
@@ -71,6 +91,20 @@ def main():
 
         app = create_ui()
         app.launch(share=args.share)
+
+    elif args.command == "api":
+        import uvicorn
+
+        from .api import app as fastapi_app
+
+        print(f"Starting ScanSplitter API server at http://{args.host}:{args.port}")
+        print("API docs available at /docs")
+        uvicorn.run(
+            "scansplitter.api:app" if args.reload else fastapi_app,
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+        )
 
     elif args.command == "process":
         process_files_cli(args)
