@@ -20,6 +20,9 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
   const isUpdatingRef = useRef(false);
   const currentImageUrlRef = useRef<string | null>(null);
   const imageScaleRef = useRef(1);
+  // Canvas padding for rotation handles (pixels on each side)
+  const CANVAS_PADDING = 50;
+  const canvasPaddingRef = useRef(CANVAS_PADDING);
   // Ref to store latest onBoxesChange to avoid stale closures in event handlers
   const onBoxesChangeRef = useRef(onBoxesChange);
   onBoxesChangeRef.current = onBoxesChange;
@@ -80,6 +83,7 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     if (!canvas) return [];
 
     const scale = imageScaleRef.current;
+    const padding = canvasPaddingRef.current;
     const currentBoxes: BoundingBox[] = [];
 
     canvas.getObjects("rect").forEach((obj) => {
@@ -90,9 +94,9 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       const scaleY = rect.scaleY || 1;
       const width = (rect.width || 0) * scaleX;
       const height = (rect.height || 0) * scaleY;
-      // With center origin, left/top IS the center
-      const centerX = rect.left || 0;
-      const centerY = rect.top || 0;
+      // With center origin, left/top IS the center (subtract padding to get image-relative coords)
+      const centerX = (rect.left || 0) - padding;
+      const centerY = (rect.top || 0) - padding;
 
       // Convert back to original image coordinates
       currentBoxes.push({
@@ -136,45 +140,49 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     htmlImg.onload = () => {
       const imgWidth = htmlImg.naturalWidth;
       const imgHeight = htmlImg.naturalHeight;
+      const padding = canvasPaddingRef.current;
 
-      // Get container dimensions (subtract padding: p-12 = 48px on each side)
-      const padding = 48 * 2; // p-12 = 3rem = 48px, on both sides
-      const containerWidth = (container.clientWidth || 800) - padding;
-      const containerHeight = (container.clientHeight || 600) - padding;
+      // Get container dimensions
+      const containerWidth = container.clientWidth || 800;
+      const containerHeight = container.clientHeight || 600;
 
-      // Calculate scale to fit container while maintaining aspect ratio
+      // Calculate scale to fit container (accounting for padding on canvas)
+      const availableWidth = containerWidth - padding * 2;
+      const availableHeight = containerHeight - padding * 2;
       const scale = Math.min(
-        containerWidth / imgWidth,
-        containerHeight / imgHeight,
+        availableWidth / imgWidth,
+        availableHeight / imgHeight,
         1 // Don't scale up small images
       );
 
-      const canvasWidth = Math.round(imgWidth * scale);
-      const canvasHeight = Math.round(imgHeight * scale);
+      const scaledImgWidth = Math.round(imgWidth * scale);
+      const scaledImgHeight = Math.round(imgHeight * scale);
+      // Canvas is larger than image to accommodate rotation handles
+      const canvasWidth = scaledImgWidth + padding * 2;
+      const canvasHeight = scaledImgHeight + padding * 2;
 
       imageScaleRef.current = scale;
 
-      console.log("Image:", imgWidth, "x", imgHeight, "Container:", containerWidth, "x", containerHeight, "Scale:", scale, "Canvas:", canvasWidth, "x", canvasHeight);
+      console.log("Image:", imgWidth, "x", imgHeight, "Scaled:", scaledImgWidth, "x", scaledImgHeight, "Canvas (with padding):", canvasWidth, "x", canvasHeight);
 
-      // Set canvas dimensions to scaled size
+      // Set canvas dimensions (image + padding for handles)
       canvas.setDimensions({
         width: canvasWidth,
         height: canvasHeight,
       });
 
-      // Create Fabric image and scale it to fit the canvas
+      // Create Fabric image and position with offset for padding
       const fabricImg = new fabric.FabricImage(htmlImg, {
         originX: 'left',
         originY: 'top',
-        left: 0,
-        top: 0,
+        left: padding,
+        top: padding,
       });
-      fabricImg.scaleToWidth(canvasWidth);
+      fabricImg.scaleToWidth(scaledImgWidth);
 
       // Clear and set background
       canvas.clear();
       canvas.backgroundImage = fabricImg;
-      canvas.backgroundImage.set({ left: 0, top: 0 });
       canvas.renderAll();
 
       setImageLoaded(true);
@@ -197,7 +205,8 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
 
     isUpdatingRef.current = true;
     const scale = imageScaleRef.current;
-    console.log("Adding/updating boxes. Scale:", scale);
+    const padding = canvasPaddingRef.current;
+    console.log("Adding/updating boxes. Scale:", scale, "Padding:", padding);
 
     // Get current box IDs on canvas
     const currentIds = new Set(
@@ -219,11 +228,11 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
         (obj) => (obj as fabric.Rect & { data?: { id: string } }).data?.id === box.id
       );
 
-      // Scale box coordinates to canvas coordinates
+      // Scale box coordinates to canvas coordinates and add padding offset
       const scaledBox = {
         ...box,
-        centerX: box.centerX * scale,
-        centerY: box.centerY * scale,
+        centerX: box.centerX * scale + padding,
+        centerY: box.centerY * scale + padding,
         width: box.width * scale,
         height: box.height * scale,
       };
@@ -297,19 +306,21 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     if (!canvas) return;
 
     const scale = imageScaleRef.current;
-    const canvasWidth = canvas.getWidth();
-    const canvasHeight = canvas.getHeight();
+    const padding = canvasPaddingRef.current;
+    // Image area is canvas minus padding on each side
+    const imageWidth = canvas.getWidth() - padding * 2;
+    const imageHeight = canvas.getHeight() - padding * 2;
 
     // Read current boxes from canvas to preserve any modifications
     const currentBoxes = readBoxesFromCanvas();
 
-    // Create new box in center (in original image coordinates)
+    // Create new box in center of image (in original image coordinates)
     const newBox: BoundingBox = {
       id: crypto.randomUUID().slice(0, 8),
-      centerX: (canvasWidth / 2) / scale,
-      centerY: (canvasHeight / 2) / scale,
-      width: Math.min(200, canvasWidth * 0.3) / scale,
-      height: Math.min(150, canvasHeight * 0.3) / scale,
+      centerX: (imageWidth / 2) / scale,
+      centerY: (imageHeight / 2) / scale,
+      width: Math.min(200, imageWidth * 0.3) / scale,
+      height: Math.min(150, imageHeight * 0.3) / scale,
       angle: 0,
     };
 
@@ -398,10 +409,10 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
         </span>
       </div>
 
-      {/* Canvas container - overflow visible to show rotation handles */}
+      {/* Canvas container */}
       <div
         ref={containerRef}
-        className="flex-1 bg-muted/30 rounded-lg overflow-visible flex items-center justify-center min-h-[400px] relative p-12"
+        className="flex-1 bg-muted/30 rounded-lg overflow-hidden flex items-center justify-center min-h-[400px] relative"
       >
         {/* Canvas wrapper - Fabric creates its own wrapper, so we wrap that */}
         <div style={{
