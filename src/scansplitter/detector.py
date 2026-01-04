@@ -161,23 +161,37 @@ def crop_rotated_region(cv_image: np.ndarray, region: DetectedRegion) -> np.ndar
     width, height = region.size
     angle = region.angle
 
-    width, height = int(width), int(height)
+    width, height = int(round(width)), int(round(height))
+    if width <= 0 or height <= 0:
+        return np.zeros((0, 0, cv_image.shape[2]), dtype=cv_image.dtype)
 
-    # Get rotation matrix to straighten the region
-    # Negate angle because we want to rotate the image in the opposite direction
-    # to make the region axis-aligned
+    # Rotate the full image so the region becomes axis-aligned, then crop.
+    #
+    # Important: The rotation center is the region center (not necessarily the
+    # image center). The common "new size" formula (based on cos/sin) assumes a
+    # center rotation and can clip content when rotating around arbitrary points.
+    # Compute the rotated image bounds by transforming the four image corners.
     rotation_matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
 
-    # Calculate the size of the rotated image to avoid clipping
     img_height, img_width = cv_image.shape[:2]
-    cos_angle = abs(rotation_matrix[0, 0])
-    sin_angle = abs(rotation_matrix[0, 1])
-    new_width = int(img_height * sin_angle + img_width * cos_angle)
-    new_height = int(img_height * cos_angle + img_width * sin_angle)
+    corners = np.array(
+        [[0, 0], [img_width, 0], [img_width, img_height], [0, img_height]],
+        dtype=np.float32,
+    )
+    ones = np.ones((4, 1), dtype=np.float32)
+    corners_h = np.hstack([corners, ones])  # (4, 3)
+    rotated_corners = corners_h @ rotation_matrix.T  # (4, 2)
+    min_xy = rotated_corners.min(axis=0)
+    max_xy = rotated_corners.max(axis=0)
 
-    # Adjust the rotation matrix to account for the new image size
-    rotation_matrix[0, 2] += (new_width - img_width) / 2
-    rotation_matrix[1, 2] += (new_height - img_height) / 2
+    new_width = int(np.ceil(max_xy[0] - min_xy[0]))
+    new_height = int(np.ceil(max_xy[1] - min_xy[1]))
+    if new_width <= 0 or new_height <= 0:
+        return np.zeros((0, 0, cv_image.shape[2]), dtype=cv_image.dtype)
+
+    # Shift the rotated image so all coordinates are positive.
+    rotation_matrix[0, 2] -= float(min_xy[0])
+    rotation_matrix[1, 2] -= float(min_xy[1])
 
     # Rotate the entire image
     rotated = cv2.warpAffine(
@@ -195,10 +209,10 @@ def crop_rotated_region(cv_image: np.ndarray, region: DetectedRegion) -> np.ndar
     new_cy = cx * rotation_matrix[1, 0] + cy * rotation_matrix[1, 1] + rotation_matrix[1, 2]
 
     # Crop the now-aligned rectangle
-    x1 = int(new_cx - width / 2)
-    y1 = int(new_cy - height / 2)
-    x2 = int(new_cx + width / 2)
-    y2 = int(new_cy + height / 2)
+    x1 = int(round(new_cx - width / 2))
+    y1 = int(round(new_cy - height / 2))
+    x2 = int(round(new_cx + width / 2))
+    y2 = int(round(new_cy + height / 2))
 
     # Clamp to image bounds
     x1 = max(0, x1)
