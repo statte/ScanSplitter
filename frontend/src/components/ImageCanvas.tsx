@@ -30,12 +30,15 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       fabricRef.current.dispose();
     }
 
+    console.log("Initializing Fabric canvas");
     const canvas = new fabric.Canvas(canvasRef.current, {
       selection: true,
       preserveObjectStacking: true,
+      renderOnAddRemove: true,
     });
 
     fabricRef.current = canvas;
+    console.log("Fabric canvas initialized, selection enabled:", canvas.selection);
 
     // Handle selection changes
     canvas.on("selection:created", (e) => {
@@ -178,10 +181,12 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
   // Update boxes on canvas when props change (and image is loaded)
   useEffect(() => {
     const canvas = fabricRef.current;
+    console.log("Boxes effect running. Canvas:", !!canvas, "imageLoaded:", imageLoaded, "boxes:", boxes.length);
     if (!canvas || !imageLoaded) return;
 
     isUpdatingRef.current = true;
     const scale = imageScaleRef.current;
+    console.log("Adding/updating boxes. Scale:", scale);
 
     // Get current box IDs on canvas
     const currentIds = new Set(
@@ -254,18 +259,26 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       fill: "rgba(59, 130, 246, 0.2)",
       stroke: "#3b82f6",
       strokeWidth: 2,
+      // Make sure it's selectable and has controls
+      selectable: true,
+      hasControls: true,
+      hasBorders: true,
+      lockRotation: false,
+      // Control styling
       cornerColor: "#3b82f6",
       cornerStyle: "circle",
-      cornerSize: 10,
+      cornerSize: 12,
       transparentCorners: false,
       borderColor: "#3b82f6",
       borderScaleFactor: 2,
+      padding: 0,
     });
 
     // Store ID in data property
     (rect as fabric.Rect & { data: { id: string } }).data = { id: box.id };
 
     canvas.add(rect);
+    console.log("Added box to canvas:", box.id, "Total objects:", canvas.getObjects().length);
   }, []);
 
   const handleAddBox = useCallback(() => {
@@ -372,13 +385,15 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       {/* Canvas container */}
       <div
         ref={containerRef}
-        className="flex-1 bg-muted/30 rounded-lg overflow-hidden flex items-center justify-center min-h-[400px]"
+        className="flex-1 bg-muted/30 rounded-lg overflow-hidden flex items-center justify-center min-h-[400px] relative"
       >
-        {/* Always render canvas, hide when not needed */}
-        <canvas
-          ref={canvasRef}
-          style={{ display: imageUrl && imageLoaded ? 'block' : 'none' }}
-        />
+        {/* Canvas wrapper - Fabric creates its own wrapper, so we wrap that */}
+        <div style={{
+          visibility: imageUrl && imageLoaded ? 'visible' : 'hidden',
+          position: imageUrl && imageLoaded ? 'relative' : 'absolute',
+        }}>
+          <canvas ref={canvasRef} />
+        </div>
         {!imageUrl && (
           <p className="text-muted-foreground">Upload an image to get started</p>
         )}
