@@ -20,6 +20,9 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
   const isUpdatingRef = useRef(false);
   const currentImageUrlRef = useRef<string | null>(null);
   const imageScaleRef = useRef(1);
+  // Ref to store latest onBoxesChange to avoid stale closures in event handlers
+  const onBoxesChangeRef = useRef(onBoxesChange);
+  onBoxesChangeRef.current = onBoxesChange;
 
   // Initialize Fabric canvas
   useEffect(() => {
@@ -71,13 +74,13 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     };
   }, []);
 
-  // Sync boxes from canvas to state
-  const syncBoxesFromCanvas = useCallback(() => {
+  // Read current boxes from canvas (without triggering state update)
+  const readBoxesFromCanvas = useCallback((): BoundingBox[] => {
     const canvas = fabricRef.current;
-    if (!canvas) return;
+    if (!canvas) return [];
 
     const scale = imageScaleRef.current;
-    const newBoxes: BoundingBox[] = [];
+    const currentBoxes: BoundingBox[] = [];
 
     canvas.getObjects("rect").forEach((obj) => {
       const rect = obj as fabric.Rect & { data?: { id: string } };
@@ -92,7 +95,7 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       const centerY = rect.top || 0;
 
       // Convert back to original image coordinates
-      newBoxes.push({
+      currentBoxes.push({
         id: rect.data.id,
         centerX: centerX / scale,
         centerY: centerY / scale,
@@ -102,8 +105,15 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       });
     });
 
-    onBoxesChange(newBoxes);
-  }, [onBoxesChange]);
+    return currentBoxes;
+  }, []);
+
+  // Sync boxes from canvas to state
+  const syncBoxesFromCanvas = useCallback(() => {
+    const newBoxes = readBoxesFromCanvas();
+    // Use ref to avoid stale closure issues in event handlers
+    onBoxesChangeRef.current(newBoxes);
+  }, [readBoxesFromCanvas]);
 
   // Load image when URL changes
   useEffect(() => {
@@ -289,6 +299,9 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     const canvasWidth = canvas.getWidth();
     const canvasHeight = canvas.getHeight();
 
+    // Read current boxes from canvas to preserve any modifications
+    const currentBoxes = readBoxesFromCanvas();
+
     // Create new box in center (in original image coordinates)
     const newBox: BoundingBox = {
       id: crypto.randomUUID().slice(0, 8),
@@ -299,14 +312,16 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
       angle: 0,
     };
 
-    onBoxesChange([...boxes, newBox]);
-  }, [boxes, onBoxesChange]);
+    onBoxesChangeRef.current([...currentBoxes, newBox]);
+  }, [readBoxesFromCanvas]);
 
   const handleDeleteSelected = useCallback(() => {
     if (selectedIds.size === 0) return;
 
-    const newBoxes = boxes.filter((box) => !selectedIds.has(box.id));
-    onBoxesChange(newBoxes);
+    // Read current boxes from canvas and filter out selected
+    const currentBoxes = readBoxesFromCanvas();
+    const newBoxes = currentBoxes.filter((box) => !selectedIds.has(box.id));
+    onBoxesChangeRef.current(newBoxes);
     setSelectedIds(new Set());
 
     // Also remove from canvas
@@ -319,10 +334,10 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     toRemove.forEach((obj) => canvas.remove(obj));
     canvas.discardActiveObject();
     canvas.renderAll();
-  }, [boxes, selectedIds, onBoxesChange]);
+  }, [selectedIds, readBoxesFromCanvas]);
 
   const handleReset = useCallback(() => {
-    onBoxesChange([]);
+    onBoxesChangeRef.current([]);
     setSelectedIds(new Set());
 
     const canvas = fabricRef.current;
@@ -333,7 +348,7 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
     rects.forEach((obj) => canvas.remove(obj));
     canvas.discardActiveObject();
     canvas.renderAll();
-  }, [onBoxesChange]);
+  }, []);
 
   // Handle keyboard shortcuts
   useEffect(() => {
