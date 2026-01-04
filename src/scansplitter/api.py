@@ -96,13 +96,22 @@ class CropResponse(BaseModel):
     images: list[CroppedImage]
 
 
+class ImageData(BaseModel):
+    """Image data for export."""
+
+    id: str
+    data: str  # base64 encoded
+    name: str
+
+
 class ExportRequest(BaseModel):
     """Request for export."""
 
     session_id: str
     format: str = "jpeg"  # jpeg or png
     quality: int = 85
-    names: dict[str, str] | None = None  # id -> custom name
+    names: dict[str, str] | None = None  # id -> custom name (legacy)
+    images: list[ImageData] | None = None  # Direct image data with rotations applied
 
 
 class ExportLocalRequest(BaseModel):
@@ -112,7 +121,8 @@ class ExportLocalRequest(BaseModel):
     output_directory: str
     format: str = "jpeg"  # jpeg or png
     quality: int = 85
-    names: dict[str, str] | None = None  # id -> custom name
+    names: dict[str, str] | None = None  # id -> custom name (legacy)
+    images: list[ImageData] | None = None  # Direct image data with rotations applied
 
 
 # --- Helper Functions ---
@@ -357,10 +367,36 @@ async def export_zip(request: ExportRequest):
     """Export cropped images as a ZIP file."""
     session = get_session_or_404(request.session_id)
 
+    # Use provided image data if available (includes client-side rotations)
+    if request.images:
+        zip_path = session.directory / "export.zip"
+        ext = "png" if request.format.lower() == "png" else "jpg"
+
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for img_data in request.images:
+                # Decode base64 and re-encode in requested format
+                img_bytes = base64.b64decode(img_data.data)
+                img = Image.open(io.BytesIO(img_bytes))
+
+                buffer = io.BytesIO()
+                if request.format.lower() == "png":
+                    img.save(buffer, "PNG", optimize=True)
+                else:
+                    img.save(buffer, "JPEG", quality=request.quality)
+
+                filename = f"{img_data.name}.{ext}"
+                zf.writestr(filename, buffer.getvalue())
+
+        return FileResponse(
+            zip_path,
+            media_type="application/zip",
+            filename="scansplitter_export.zip",
+        )
+
+    # Legacy fallback: use cached images from session
     if not session.cropped_images:
         raise HTTPException(status_code=400, detail="No cropped images to export")
 
-    # Create ZIP file
     zip_path = session.directory / "export.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, img_path in enumerate(session.cropped_images, 1):
@@ -377,7 +413,6 @@ async def export_zip(request: ExportRequest):
                     ext = "jpg"
 
                 # Get custom name if provided, otherwise use default
-                # Filename is cropped_{id}.jpg, extract the id
                 img_id = img_path.stem.replace("cropped_", "")
                 if request.names and img_id in request.names:
                     filename = f"{request.names[img_id]}.{ext}"
@@ -398,9 +433,6 @@ async def export_local(request: ExportLocalRequest):
     """Export cropped images to a local directory."""
     session = get_session_or_404(request.session_id)
 
-    if not session.cropped_images:
-        raise HTTPException(status_code=400, detail="No cropped images to export")
-
     # Validate output directory
     output_path = Path(request.output_directory).expanduser().resolve()
 
@@ -409,31 +441,50 @@ async def export_local(request: ExportLocalRequest):
     if not output_path.is_dir():
         raise HTTPException(status_code=400, detail=f"Path is not a directory: {output_path}")
 
-    # Write files
+    ext = "png" if request.format.lower() == "png" else "jpg"
     exported_files = []
+
     try:
-        for i, img_path in enumerate(session.cropped_images, 1):
-            if img_path.exists():
-                img = Image.open(img_path)
+        # Use provided image data if available (includes client-side rotations)
+        if request.images:
+            for img_data in request.images:
+                # Decode base64 and re-encode in requested format
+                img_bytes = base64.b64decode(img_data.data)
+                img = Image.open(io.BytesIO(img_bytes))
 
-                # Determine extension and filename
-                ext = "png" if request.format.lower() == "png" else "jpg"
-                img_id = img_path.stem.replace("cropped_", "")
-
-                if request.names and img_id in request.names:
-                    filename = f"{request.names[img_id]}.{ext}"
-                else:
-                    filename = f"photo_{i:03d}.{ext}"
-
+                filename = f"{img_data.name}.{ext}"
                 output_file = output_path / filename
 
-                # Save the image
                 if request.format.lower() == "png":
                     img.save(output_file, "PNG", optimize=True)
                 else:
                     img.save(output_file, "JPEG", quality=request.quality)
 
                 exported_files.append(str(output_file))
+        else:
+            # Legacy fallback: use cached images from session
+            if not session.cropped_images:
+                raise HTTPException(status_code=400, detail="No cropped images to export")
+
+            for i, img_path in enumerate(session.cropped_images, 1):
+                if img_path.exists():
+                    img = Image.open(img_path)
+
+                    img_id = img_path.stem.replace("cropped_", "")
+                    if request.names and img_id in request.names:
+                        filename = f"{request.names[img_id]}.{ext}"
+                    else:
+                        filename = f"photo_{i:03d}.{ext}"
+
+                    output_file = output_path / filename
+
+                    if request.format.lower() == "png":
+                        img.save(output_file, "PNG", optimize=True)
+                    else:
+                        img.save(output_file, "JPEG", quality=request.quality)
+
+                    exported_files.append(str(output_file))
+
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Permission denied writing to: {output_path}")
     except Exception as e:

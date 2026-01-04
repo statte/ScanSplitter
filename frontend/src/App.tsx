@@ -5,6 +5,7 @@ import { ImageCanvas } from "@/components/ImageCanvas";
 import { PageNavigator } from "@/components/PageNavigator";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { ResultsGallery } from "@/components/ResultsGallery";
+import { Toast, type ToastType } from "@/components/Toast";
 import { uploadFile, detectBoxes, cropImages, exportZip, exportLocal, getImageUrl } from "@/lib/api";
 import type { UploadedFile, BoundingBox, CroppedImage, DetectionSettings } from "@/types";
 
@@ -33,6 +34,13 @@ function App() {
   const [outputDirectory, setOutputDirectory] = useState<string>(() =>
     localStorage.getItem("scansplitter_output_dir") ?? ""
   );
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  const showToast = useCallback((message: string, type: ToastType = "success") => {
+    setToast({ message, type });
+  }, []);
 
   // Persist output directory to localStorage
   useEffect(() => {
@@ -214,12 +222,13 @@ function App() {
     if (!activeFile || croppedImages.length === 0) return;
     setIsExporting(true);
     try {
-      // Build names map from cropped images
-      const names = croppedImages.reduce(
-        (acc, img) => ({ ...acc, [img.id]: img.name }),
-        {} as Record<string, string>
-      );
-      const blob = await exportZip(activeFile.sessionId, "jpeg", 85, names);
+      // Build image data array with current rotations applied
+      const images = croppedImages.map((img) => ({
+        id: img.id,
+        data: img.data,
+        name: img.name,
+      }));
+      const blob = await exportZip(activeFile.sessionId, "jpeg", 85, images);
 
       // Download the blob
       const url = URL.createObjectURL(blob);
@@ -230,43 +239,47 @@ function App() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+
+      showToast(`Downloaded ${croppedImages.length} images as ZIP`, "success");
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export photos");
+      showToast("Failed to export photos", "error");
     } finally {
       setIsExporting(false);
     }
-  }, [activeFile, croppedImages]);
+  }, [activeFile, croppedImages, showToast]);
 
   // Handle export to local directory
   const handleExportLocal = useCallback(async () => {
     if (!activeFile || croppedImages.length === 0) return;
     if (!outputDirectory.trim()) {
-      alert("Please enter an output directory");
+      showToast("Please enter an output directory", "error");
       return;
     }
 
     setIsExporting(true);
     try {
-      const names = croppedImages.reduce(
-        (acc, img) => ({ ...acc, [img.id]: img.name }),
-        {} as Record<string, string>
-      );
+      // Build image data array with current rotations applied
+      const images = croppedImages.map((img) => ({
+        id: img.id,
+        data: img.data,
+        name: img.name,
+      }));
       const result = await exportLocal(
         activeFile.sessionId,
         outputDirectory,
         "jpeg",
         85,
-        names
+        images
       );
-      alert(`Exported ${result.count} images to ${outputDirectory}`);
+      showToast(`Exported ${result.count} images to ${outputDirectory}`, "success");
     } catch (error) {
       console.error("Export failed:", error);
-      alert(error instanceof Error ? error.message : "Failed to export photos");
+      showToast(error instanceof Error ? error.message : "Failed to export photos", "error");
     } finally {
       setIsExporting(false);
     }
-  }, [activeFile, croppedImages, outputDirectory]);
+  }, [activeFile, croppedImages, outputDirectory, showToast]);
 
   // Get current image URL
   const imageUrl = activeFile
@@ -342,6 +355,15 @@ function App() {
           </div>
         </div>
       </div>
+
+      {/* Toast notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
     </div>
   );
 }

@@ -110,11 +110,17 @@ export async function cropImages(
   }));
 }
 
+export interface ExportImageData {
+  id: string;
+  data: string;
+  name: string;
+}
+
 export async function exportZip(
   sessionId: string,
   format: "jpeg" | "png",
   quality: number,
-  names?: Record<string, string>
+  images: ExportImageData[]
 ): Promise<Blob> {
   const response = await fetch(`${API_BASE}/export`, {
     method: "POST",
@@ -123,7 +129,7 @@ export async function exportZip(
       session_id: sessionId,
       format,
       quality,
-      names,
+      images,
     }),
   });
 
@@ -139,7 +145,7 @@ export async function exportLocal(
   outputDirectory: string,
   format: "jpeg" | "png",
   quality: number,
-  names?: Record<string, string>
+  images: ExportImageData[]
 ): Promise<{ status: string; files: string[]; count: number }> {
   const response = await fetch(`${API_BASE}/export-local`, {
     method: "POST",
@@ -149,7 +155,7 @@ export async function exportLocal(
       output_directory: outputDirectory,
       format,
       quality,
-      names,
+      images,
     }),
   });
 
