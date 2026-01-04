@@ -3,7 +3,7 @@ import { Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface FileUploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (files: File[]) => void;
   disabled?: boolean;
 }
 
@@ -28,14 +28,14 @@ export function FileUpload({ onUpload, disabled }: FileUploadProps) {
       if (disabled) return;
 
       const files = Array.from(e.dataTransfer.files);
-      const validFile = files.find(
+      const validFiles = files.filter(
         (f) =>
           f.type.startsWith("image/") ||
           f.type === "application/pdf"
       );
 
-      if (validFile) {
-        onUpload(validFile);
+      if (validFiles.length > 0) {
+        onUpload(validFiles);
       }
     },
     [onUpload, disabled]
@@ -43,9 +43,14 @@ export function FileUpload({ onUpload, disabled }: FileUploadProps) {
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        onUpload(file);
+      const files = Array.from(e.target.files ?? []);
+      const validFiles = files.filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          f.type === "application/pdf"
+      );
+      if (validFiles.length > 0) {
+        onUpload(validFiles);
       }
       // Reset input so same file can be selected again
       e.target.value = "";
@@ -73,6 +78,7 @@ export function FileUpload({ onUpload, disabled }: FileUploadProps) {
         accept="image/*,.pdf"
         onChange={handleFileSelect}
         disabled={disabled}
+        multiple
       />
       <label
         htmlFor="file-upload"

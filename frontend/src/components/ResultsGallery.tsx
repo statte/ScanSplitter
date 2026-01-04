@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, FolderDown } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +7,21 @@ import type { CroppedImage } from "@/types";
 interface ResultsGalleryProps {
   images: CroppedImage[];
   onExport: () => void;
+  onExportLocal: () => void;
   onNameChange: (id: string, name: string) => void;
   isExporting: boolean;
+  outputDirectory: string;
+  onOutputDirectoryChange: (path: string) => void;
 }
 
 export function ResultsGallery({
   images,
   onExport,
+  onExportLocal,
   onNameChange,
   isExporting,
+  outputDirectory,
+  onOutputDirectoryChange,
 }: ResultsGalleryProps) {
   const downloadImage = (image: CroppedImage) => {
     const link = document.createElement("a");
@@ -42,16 +48,38 @@ export function ResultsGallery({
 
   return (
     <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Results ({images.length})</CardTitle>
-        <Button
-          size="sm"
-          onClick={onExport}
-          disabled={isExporting}
-        >
-          <Download className="w-4 h-4 mr-1" />
-          {isExporting ? "Exporting..." : "Download ZIP"}
-        </Button>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Results ({images.length})</CardTitle>
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onExportLocal}
+              disabled={isExporting || !outputDirectory}
+              title={!outputDirectory ? "Set output directory first" : "Export to directory"}
+            >
+              <FolderDown className="w-4 h-4 mr-1" />
+              Export
+            </Button>
+            <Button
+              size="sm"
+              onClick={onExport}
+              disabled={isExporting}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              ZIP
+            </Button>
+          </div>
+        </div>
+        <div className="mt-2">
+          <Input
+            value={outputDirectory}
+            onChange={(e) => onOutputDirectoryChange(e.target.value)}
+            placeholder="/path/to/output"
+            className="text-xs h-7"
+          />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">

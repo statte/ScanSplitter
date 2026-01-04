@@ -134,6 +134,33 @@ export async function exportZip(
   return response.blob();
 }
 
+export async function exportLocal(
+  sessionId: string,
+  outputDirectory: string,
+  format: "jpeg" | "png",
+  quality: number,
+  names?: Record<string, string>
+): Promise<{ status: string; files: string[]; count: number }> {
+  const response = await fetch(`${API_BASE}/export-local`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      output_directory: outputDirectory,
+      format,
+      quality,
+      names,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(error.detail || `Export failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 export function getImageUrl(sessionId: string, filename: string, page: number): string {
   return `${API_BASE}/image/${sessionId}/${filename}?page=${page}`;
 }

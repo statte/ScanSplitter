@@ -1,11 +1,11 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { FileUpload } from "@/components/FileUpload";
 import { FileTabs } from "@/components/FileTabs";
 import { ImageCanvas } from "@/components/ImageCanvas";
 import { PageNavigator } from "@/components/PageNavigator";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { ResultsGallery } from "@/components/ResultsGallery";
-import { uploadFile, detectBoxes, cropImages, exportZip, getImageUrl } from "@/lib/api";
+import { uploadFile, detectBoxes, cropImages, exportZip, exportLocal, getImageUrl } from "@/lib/api";
 import type { UploadedFile, BoundingBox, CroppedImage, DetectionSettings } from "@/types";
 
 function App() {
@@ -29,29 +29,44 @@ function App() {
   const [isCropping, setIsCropping] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Output directory (persisted to localStorage)
+  const [outputDirectory, setOutputDirectory] = useState<string>(() =>
+    localStorage.getItem("scansplitter_output_dir") ?? ""
+  );
+
+  // Persist output directory to localStorage
+  useEffect(() => {
+    localStorage.setItem("scansplitter_output_dir", outputDirectory);
+  }, [outputDirectory]);
+
   // Get active file
   const activeFile = files[activeFileIndex] ?? null;
 
-  // Handle file upload
-  const handleUpload = useCallback(async (file: File) => {
+  // Handle file upload (multiple files)
+  const handleUpload = useCallback(async (filesToUpload: File[]) => {
     setIsUploading(true);
+    const startIndex = files.length;
+
     try {
-      const result = await uploadFile(file);
-      const newFile: UploadedFile = {
-        sessionId: result.sessionId,
-        filename: result.filename,
-        pageCount: result.pageCount,
-        currentPage: 1,
-        imageWidth: result.imageWidth,
-        imageHeight: result.imageHeight,
-        boxes: [],
-      };
-      setFiles((prev) => [...prev, newFile]);
-      setActiveFileIndex(files.length);
+      for (const file of filesToUpload) {
+        const result = await uploadFile(file);
+        const newFile: UploadedFile = {
+          sessionId: result.sessionId,
+          filename: result.filename,
+          pageCount: result.pageCount,
+          currentPage: 1,
+          imageWidth: result.imageWidth,
+          imageHeight: result.imageHeight,
+          boxes: [],
+        };
+        setFiles((prev) => [...prev, newFile]);
+      }
+      // Switch to first newly uploaded file
+      setActiveFileIndex(startIndex);
       setCroppedImages([]);
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("Failed to upload file");
+      alert("Failed to upload file(s)");
     } finally {
       setIsUploading(false);
     }
@@ -171,6 +186,36 @@ function App() {
     }
   }, [activeFile, croppedImages]);
 
+  // Handle export to local directory
+  const handleExportLocal = useCallback(async () => {
+    if (!activeFile || croppedImages.length === 0) return;
+    if (!outputDirectory.trim()) {
+      alert("Please enter an output directory");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const names = croppedImages.reduce(
+        (acc, img) => ({ ...acc, [img.id]: img.name }),
+        {} as Record<string, string>
+      );
+      const result = await exportLocal(
+        activeFile.sessionId,
+        outputDirectory,
+        "jpeg",
+        85,
+        names
+      );
+      alert(`Exported ${result.count} images to ${outputDirectory}`);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert(error instanceof Error ? error.message : "Failed to export photos");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [activeFile, croppedImages, outputDirectory]);
+
   // Get current image URL
   const imageUrl = activeFile
     ? getImageUrl(activeFile.sessionId, activeFile.filename, activeFile.currentPage)
@@ -234,8 +279,11 @@ function App() {
             <ResultsGallery
               images={croppedImages}
               onExport={handleExport}
+              onExportLocal={handleExportLocal}
               onNameChange={handleImageNameChange}
               isExporting={isExporting}
+              outputDirectory={outputDirectory}
+              onOutputDirectoryChange={setOutputDirectory}
             />
           </div>
         </div>

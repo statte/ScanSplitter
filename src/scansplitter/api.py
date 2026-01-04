@@ -105,6 +105,16 @@ class ExportRequest(BaseModel):
     names: dict[str, str] | None = None  # id -> custom name
 
 
+class ExportLocalRequest(BaseModel):
+    """Request for local export."""
+
+    session_id: str
+    output_directory: str
+    format: str = "jpeg"  # jpeg or png
+    quality: int = 85
+    names: dict[str, str] | None = None  # id -> custom name
+
+
 # --- Helper Functions ---
 
 
@@ -381,6 +391,55 @@ async def export_zip(request: ExportRequest):
         media_type="application/zip",
         filename="scansplitter_export.zip",
     )
+
+
+@app.post("/api/export-local")
+async def export_local(request: ExportLocalRequest):
+    """Export cropped images to a local directory."""
+    session = get_session_or_404(request.session_id)
+
+    if not session.cropped_images:
+        raise HTTPException(status_code=400, detail="No cropped images to export")
+
+    # Validate output directory
+    output_path = Path(request.output_directory).expanduser().resolve()
+
+    if not output_path.exists():
+        raise HTTPException(status_code=400, detail=f"Directory does not exist: {output_path}")
+    if not output_path.is_dir():
+        raise HTTPException(status_code=400, detail=f"Path is not a directory: {output_path}")
+
+    # Write files
+    exported_files = []
+    try:
+        for i, img_path in enumerate(session.cropped_images, 1):
+            if img_path.exists():
+                img = Image.open(img_path)
+
+                # Determine extension and filename
+                ext = "png" if request.format.lower() == "png" else "jpg"
+                img_id = img_path.stem.replace("cropped_", "")
+
+                if request.names and img_id in request.names:
+                    filename = f"{request.names[img_id]}.{ext}"
+                else:
+                    filename = f"photo_{i:03d}.{ext}"
+
+                output_file = output_path / filename
+
+                # Save the image
+                if request.format.lower() == "png":
+                    img.save(output_file, "PNG", optimize=True)
+                else:
+                    img.save(output_file, "JPEG", quality=request.quality)
+
+                exported_files.append(str(output_file))
+    except PermissionError:
+        raise HTTPException(status_code=403, detail=f"Permission denied writing to: {output_path}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+    return {"status": "success", "files": exported_files, "count": len(exported_files)}
 
 
 @app.delete("/api/session/{session_id}")
