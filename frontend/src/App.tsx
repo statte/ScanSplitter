@@ -482,12 +482,18 @@ function App() {
     <div className="h-screen flex flex-col p-4 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
-        <header className="mb-4 flex-shrink-0 flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold">ScanSplitter</h1>
-            <p className="text-sm text-muted-foreground">
-              Detect, adjust, and extract photos from scanned images
-            </p>
+        <header className="mb-4 flex-shrink-0 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/logo_grid_only.png" alt="ScanSplitter" className="w-10 h-10" />
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">
+                <span className="text-primary">Scan</span>
+                <span className="text-muted-foreground">Splitter</span>
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Detect, adjust, and extract photos from scanned images
+              </p>
+            </div>
           </div>
           <Button
             size="sm"
