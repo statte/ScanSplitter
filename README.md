@@ -16,6 +16,10 @@ Automatically detect, split, and rotate multiple photos from scanned images.
 
 Drop a scan containing multiple photos and get individual, correctly-oriented images back.
 
+<p align="center">
+  <img src="frontend/public/screenshot.png" alt="ScanSplitter Screenshot" width="800">
+</p>
+
 ## Quick Start
 
 **One-time setup** - Install [uv](https://docs.astral.sh/uv/):
