@@ -46,8 +46,11 @@ echo "Bumping version: $CURRENT_VERSION → $NEW_VERSION"
 sed -i.bak "s/^version = \"$CURRENT_VERSION\"/version = \"$NEW_VERSION\"/" "$PYPROJECT"
 rm -f "$PYPROJECT.bak"
 
+# Update uv.lock to reflect new version
+uv sync
+
 # Git operations
-git add "$PYPROJECT"
+git add "$PYPROJECT" uv.lock
 git commit -m "Bump version to $NEW_VERSION"
 git tag "v$NEW_VERSION"
 
