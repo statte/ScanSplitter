@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="frontend/public/logo.png" alt="ScanSplitter Logo" width="200">
+  <img src="https://raw.githubusercontent.com/madnex/scansplitter/main/frontend/public/logo.png" alt="ScanSplitter Logo" width="200">
 </p>
 
 <h1 align="center">
@@ -17,7 +17,7 @@ Automatically detect, split, and rotate multiple photos from scanned images.
 Drop a scan containing multiple photos and get individual, correctly-oriented images back.
 
 <p align="center">
-  <img src="frontend/public/screenshot.png" alt="ScanSplitter Screenshot" width="800">
+  <img src="https://raw.githubusercontent.com/madnex/scansplitter/main/frontend/public/screenshot.png" alt="ScanSplitter Screenshot" width="800">
 </p>
 
 ## Quick Start
