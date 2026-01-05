@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
-from .detector import DetectedRegion, crop_rotated_region, detect_photos
+from .detector import DetectedRegion, crop_rotated_region, detect_photos, detect_photos_u2net
 from .exif_handler import apply_exif_to_jpeg, create_exif_bytes, extract_exif
 from .pdf_handler import extract_images_from_pdf, is_pdf
 from .rotator import auto_rotate
@@ -63,6 +63,17 @@ class DetectRequest(BaseModel):
     page: int = 1
     min_area: float = 2.0  # percentage
     max_area: float = 80.0  # percentage
+    # Phase 1: Enhanced detection options
+    enhance_contrast: bool = True
+    adaptive_morphology: bool = True
+    min_solidity: float = 0.7
+    max_aspect_ratio: float = 5.0
+    min_extent: float = 0.4
+    border_mode: str = "minAreaRect"  # "minAreaRect" or "convexHull"
+    border_padding: float = 0.02
+    # Phase 2: U2-Net detection mode
+    detection_mode: str = "classic"  # "classic" or "u2net"
+    u2net_lite: bool = True  # Use lightweight model (faster) vs full (more accurate)
 
 
 class DetectResponse(BaseModel):
@@ -310,12 +321,29 @@ async def detect_boxes(request: DetectRequest):
     filename = list(session.files.keys())[0]
     image = load_page_image(session, filename, request.page)
 
-    # Run detection
-    regions = detect_photos(
-        image,
-        min_area_ratio=request.min_area / 100,
-        max_area_ratio=request.max_area / 100,
-    )
+    # Run detection based on mode
+    if request.detection_mode == "u2net":
+        # Use U2-Net deep learning detection
+        regions = detect_photos_u2net(
+            image,
+            min_area_ratio=request.min_area / 100,
+            max_area_ratio=request.max_area / 100,
+            lite=request.u2net_lite,
+        )
+    else:
+        # Use classic contour-based detection with Phase 1 improvements
+        regions = detect_photos(
+            image,
+            min_area_ratio=request.min_area / 100,
+            max_area_ratio=request.max_area / 100,
+            enhance_contrast=request.enhance_contrast,
+            adaptive_morphology=request.adaptive_morphology,
+            min_solidity=request.min_solidity,
+            max_aspect_ratio=request.max_aspect_ratio,
+            min_extent=request.min_extent,
+            border_mode=request.border_mode,  # type: ignore
+            border_padding=request.border_padding,
+        )
 
     # Convert to BoundingBox format
     boxes = []

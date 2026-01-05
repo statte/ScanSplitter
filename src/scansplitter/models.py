@@ -16,6 +16,20 @@ ORIENTATION_MODEL_URLS = [
 ]
 ORIENTATION_MODEL_FILENAME = "orientation_model_v2.onnx"
 
+# U2-Net salient object detection models (ONNX)
+# u2netp is the lightweight version (~4.7MB), u2net is the full version (~176MB)
+U2NETP_MODEL_URLS = [
+    "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx",
+    "https://github.com/Madnex/ScanSplitter/releases/download/models-v1/u2netp.onnx",
+]
+U2NETP_MODEL_FILENAME = "u2netp.onnx"
+
+U2NET_MODEL_URLS = [
+    "https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx",
+    "https://github.com/Madnex/ScanSplitter/releases/download/models-v1/u2net.onnx",
+]
+U2NET_MODEL_FILENAME = "u2net.onnx"
+
 # Cache directory for models
 MODELS_DIR = Path(__file__).parent / "model_cache"
 
@@ -81,5 +95,44 @@ def get_orientation_model_path() -> Path:
                     print(f"\nPrimary URL failed, trying backup...")
                 else:
                     raise RuntimeError(f"Failed to download orientation model: {e}") from e
+
+    return model_path
+
+
+def get_u2net_model_path(lite: bool = True) -> Path:
+    """Get path to the U2-Net salient object detection ONNX model.
+
+    Downloads the model on first use if not already cached.
+
+    Args:
+        lite: If True, use u2netp (4.7MB, faster). If False, use u2net (176MB, more accurate).
+
+    Returns:
+        Path to the ONNX model file
+    """
+    MODELS_DIR.mkdir(exist_ok=True)
+
+    if lite:
+        urls = U2NETP_MODEL_URLS
+        filename = U2NETP_MODEL_FILENAME
+        size_desc = "~5MB"
+    else:
+        urls = U2NET_MODEL_URLS
+        filename = U2NET_MODEL_FILENAME
+        size_desc = "~176MB"
+
+    model_path = MODELS_DIR / filename
+
+    if not model_path.exists():
+        print(f"Downloading U2-Net {'lite' if lite else 'full'} model ({size_desc})...")
+        for i, url in enumerate(urls):
+            try:
+                _download_with_progress(url, model_path, "Downloading")
+                break
+            except Exception as e:
+                if i < len(urls) - 1:
+                    print(f"\nPrimary URL failed, trying backup...")
+                else:
+                    raise RuntimeError(f"Failed to download U2-Net model: {e}") from e
 
     return model_path

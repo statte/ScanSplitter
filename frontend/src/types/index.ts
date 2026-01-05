@@ -43,12 +43,17 @@ export interface CroppedImage {
   dateTaken: string | null; // YYYY-MM-DD format for EXIF
 }
 
+// Detection mode
+export type DetectionMode = "classic" | "u2net";
+
 // Detection settings
 export interface DetectionSettings {
   minArea: number; // percentage
   maxArea: number; // percentage
   autoRotate: boolean;
   autoDetect: boolean; // auto-detect on upload
+  detectionMode: DetectionMode; // classic (fast) or u2net (deep learning)
+  u2netLite: boolean; // use lite model (5MB, faster) vs full (176MB, more accurate)
 }
 
 // Naming pattern for batch export

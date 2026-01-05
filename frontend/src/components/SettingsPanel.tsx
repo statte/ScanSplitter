@@ -90,6 +90,31 @@ export function SettingsPanel({
           </label>
         </div>
 
+        <div className="space-y-2">
+          <label htmlFor="detection-mode" className="text-sm">
+            Detection Mode
+          </label>
+          <select
+            id="detection-mode"
+            value={settings.detectionMode}
+            onChange={(e) =>
+              onSettingsChange({
+                ...settings,
+                detectionMode: e.target.value as "classic" | "u2net",
+              })
+            }
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="classic">Classic (Fast)</option>
+            <option value="u2net">U2-Net (AI, Accurate)</option>
+          </select>
+          <p className="text-xs text-muted-foreground">
+            {settings.detectionMode === "u2net"
+              ? "Deep learning model - better for difficult scans"
+              : "Traditional contour detection - fast and reliable"}
+          </p>
+        </div>
+
         <div className="space-y-2 pt-2">
           <Button
             onClick={onDetect}

@@ -40,6 +40,7 @@ function App() {
     maxArea: 80,
     autoRotate: true,
     autoDetect: true,
+    detectionMode: "classic",
   });
 
   // Loading states
@@ -121,7 +122,8 @@ function App() {
         sessionId,
         page,
         settings.minArea,
-        settings.maxArea
+        settings.maxArea,
+        settings.detectionMode
       );
       // Update with detected boxes
       setFiles((prev) =>
@@ -139,7 +141,7 @@ function App() {
         )
       );
     }
-  }, [settings.minArea, settings.maxArea]);
+  }, [settings.minArea, settings.maxArea, settings.detectionMode]);
 
   // Handle file upload (multiple files)
   const handleUpload = useCallback(async (filesToUpload: File[]) => {
@@ -321,7 +323,8 @@ function App() {
         activeFile.sessionId,
         activeFile.currentPage,
         settings.minArea,
-        settings.maxArea
+        settings.maxArea,
+        settings.detectionMode
       );
       handleBoxesChange(result.boxes);
     } catch (error) {
