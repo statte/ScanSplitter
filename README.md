@@ -2,13 +2,15 @@
   <img src="frontend/public/logo.png" alt="ScanSplitter Logo" width="200">
 </p>
 
+<h1 align="center">
+  <span>Scan</span><span style="color: #6b7280;">Splitter</span>
+</h1>
+
 <p align="center">
   <a href="https://pypi.org/project/scansplitter/"><img alt="PyPI" src="https://img.shields.io/pypi/v/scansplitter"></a>
   <a href="https://pypi.org/project/scansplitter/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/scansplitter"></a>
   <a href="LICENSE"><img alt="License: GPLv3" src="https://img.shields.io/badge/License-GPLv3-blue.svg"></a>
 </p>
-
-# ScanSplitter
 
 Automatically detect, split, and rotate multiple photos from scanned images.
 
