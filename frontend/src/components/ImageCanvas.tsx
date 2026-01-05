@@ -380,7 +380,7 @@ export function ImageCanvas({ imageUrl, boxes, onBoxesChange }: ImageCanvasProps
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex gap-2 mb-2">
+      <div className="flex gap-2 mb-2 flex-wrap">
         <Button size="sm" variant="outline" onClick={handleAddBox} disabled={!imageLoaded}>
           <Plus className="w-4 h-4 mr-1" />
           Add Box

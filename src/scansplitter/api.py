@@ -15,6 +15,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from .detector import DetectedRegion, crop_rotated_region, detect_photos
+from .exif_handler import apply_exif_to_jpeg, create_exif_bytes, extract_exif
 from .pdf_handler import extract_images_from_pdf, is_pdf
 from .rotator import auto_rotate
 from .session import Session, get_session_manager
@@ -102,6 +103,7 @@ class ImageData(BaseModel):
     id: str
     data: str  # base64 encoded
     name: str
+    date_taken: str | None = None  # Per-image date in YYYY-MM-DD format
 
 
 class ExportRequest(BaseModel):
@@ -124,6 +126,28 @@ class ExportLocalRequest(BaseModel):
     names: dict[str, str] | None = None  # id -> custom name (legacy)
     images: list[ImageData] | None = None  # Direct image data with rotations applied
     overwrite: bool = False  # Whether to overwrite existing files
+
+
+class ExifData(BaseModel):
+    """EXIF metadata."""
+
+    date_taken: str | None = None
+    make: str | None = None
+    model: str | None = None
+    has_gps: bool = False
+
+
+class ExifResponse(BaseModel):
+    """Response with EXIF data."""
+
+    exif: ExifData | None
+
+
+class UpdateExifRequest(BaseModel):
+    """Request to update EXIF data."""
+
+    session_id: str
+    date_taken: str | None = None  # Format: "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS"
 
 
 # --- Helper Functions ---
@@ -238,6 +262,11 @@ async def upload_file(file: UploadFile = File(...)):
         image = Image.open(file_path)
         width, height = image.size
         image.close()
+
+        # Extract EXIF from non-PDF files
+        exif = extract_exif(content)
+        if exif:
+            session.exif_data[file.filename] = exif
 
     # Store file info
     session.files[file.filename] = {
@@ -368,6 +397,13 @@ async def export_zip(request: ExportRequest):
     """Export cropped images as a ZIP file."""
     session = get_session_or_404(request.session_id)
 
+    # Get original EXIF data for potential reuse
+    original_exif_raw = None
+    if request.format.lower() != "png" and session.exif_data:
+        first_filename = list(session.files.keys())[0] if session.files else None
+        if first_filename and first_filename in session.exif_data:
+            original_exif_raw = session.exif_data[first_filename].get("_raw")
+
     # Use provided image data if available (includes client-side rotations)
     if request.images:
         zip_path = session.directory / "export.zip"
@@ -384,6 +420,14 @@ async def export_zip(request: ExportRequest):
                     img.save(buffer, "PNG", optimize=True)
                 else:
                     img.save(buffer, "JPEG", quality=request.quality)
+                    # Apply per-image EXIF if date is set
+                    if img_data.date_taken:
+                        exif_bytes = create_exif_bytes(
+                            date_taken=img_data.date_taken,
+                            original_exif=original_exif_raw,
+                        )
+                        if exif_bytes:
+                            buffer = io.BytesIO(apply_exif_to_jpeg(buffer.getvalue(), exif_bytes))
 
                 filename = f"{img_data.name}.{ext}"
                 zf.writestr(filename, buffer.getvalue())
@@ -411,6 +455,9 @@ async def export_zip(request: ExportRequest):
                     ext = "png"
                 else:
                     img.save(buffer, "JPEG", quality=request.quality)
+                    # Apply EXIF to JPEG if available
+                    if exif_bytes:
+                        buffer = io.BytesIO(apply_exif_to_jpeg(buffer.getvalue(), exif_bytes))
                     ext = "jpg"
 
                 # Get custom name if provided, otherwise use default
@@ -433,6 +480,13 @@ async def export_zip(request: ExportRequest):
 async def export_local(request: ExportLocalRequest):
     """Export cropped images to a local directory."""
     session = get_session_or_404(request.session_id)
+
+    # Get original EXIF data for potential reuse
+    original_exif_raw = None
+    if request.format.lower() != "png" and session.exif_data:
+        first_filename = list(session.files.keys())[0] if session.files else None
+        if first_filename and first_filename in session.exif_data:
+            original_exif_raw = session.exif_data[first_filename].get("_raw")
 
     # Validate output directory
     output_path = Path(request.output_directory).expanduser().resolve()
@@ -486,7 +540,18 @@ async def export_local(request: ExportLocalRequest):
                 if request.format.lower() == "png":
                     img.save(output_file, "PNG", optimize=True)
                 else:
-                    img.save(output_file, "JPEG", quality=request.quality)
+                    # Save to buffer first, apply per-image EXIF if date is set, then write
+                    buffer = io.BytesIO()
+                    img.save(buffer, "JPEG", quality=request.quality)
+                    output_bytes = buffer.getvalue()
+                    if img_data.date_taken:
+                        exif_bytes = create_exif_bytes(
+                            date_taken=img_data.date_taken,
+                            original_exif=original_exif_raw,
+                        )
+                        if exif_bytes:
+                            output_bytes = apply_exif_to_jpeg(output_bytes, exif_bytes)
+                    output_file.write_bytes(output_bytes)
 
                 exported_files.append(str(output_file))
         else:
@@ -509,7 +574,13 @@ async def export_local(request: ExportLocalRequest):
                     if request.format.lower() == "png":
                         img.save(output_file, "PNG", optimize=True)
                     else:
-                        img.save(output_file, "JPEG", quality=request.quality)
+                        # Save to buffer first, apply EXIF, then write to file
+                        buffer = io.BytesIO()
+                        img.save(buffer, "JPEG", quality=request.quality)
+                        output_bytes = buffer.getvalue()
+                        if exif_bytes:
+                            output_bytes = apply_exif_to_jpeg(output_bytes, exif_bytes)
+                        output_file.write_bytes(output_bytes)
 
                     exported_files.append(str(output_file))
 
@@ -528,6 +599,50 @@ async def delete_session(session_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "deleted"}
+
+
+@app.get("/api/exif/{session_id}", response_model=ExifResponse)
+async def get_exif(session_id: str):
+    """Get EXIF data for a session's uploaded file."""
+    session = get_session_or_404(session_id)
+
+    if not session.files:
+        return ExifResponse(exif=None)
+
+    filename = list(session.files.keys())[0]
+    exif = session.exif_data.get(filename)
+
+    if not exif:
+        return ExifResponse(exif=None)
+
+    return ExifResponse(
+        exif=ExifData(
+            date_taken=exif.get("date_taken"),
+            make=exif.get("make"),
+            model=exif.get("model"),
+            has_gps=exif.get("has_gps", False),
+        )
+    )
+
+
+@app.post("/api/exif")
+async def update_exif(request: UpdateExifRequest):
+    """Update EXIF date for a session."""
+    session = get_session_or_404(request.session_id)
+
+    if not session.files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    filename = list(session.files.keys())[0]
+
+    if filename not in session.exif_data:
+        session.exif_data[filename] = {}
+
+    if request.date_taken:
+        session.exif_data[filename]["date_taken"] = request.date_taken
+        session.exif_data[filename]["date_modified"] = True
+
+    return {"status": "ok"}
 
 
 # --- Static Files (for production) ---

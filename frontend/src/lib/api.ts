@@ -77,7 +77,7 @@ export async function cropImages(
   page: number,
   boxes: BoundingBox[],
   autoRotate: boolean
-): Promise<Omit<CroppedImage, "name" | "source">[]> {
+): Promise<Omit<CroppedImage, "name" | "source" | "dateTaken">[]> {
   const response = await fetch(`${API_BASE}/crop`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -114,6 +114,7 @@ export interface ExportImageData {
   id: string;
   data: string;
   name: string;
+  date_taken?: string | null;
 }
 
 export async function exportZip(
@@ -193,4 +194,35 @@ export async function exportLocal(
 
 export function getImageUrl(sessionId: string, filename: string, page: number): string {
   return `${API_BASE}/image/${sessionId}/${filename}?page=${page}`;
+}
+
+export interface ExifData {
+  date_taken: string | null;
+  make: string | null;
+  model: string | null;
+  has_gps: boolean;
+}
+
+export async function getExif(sessionId: string): Promise<ExifData | null> {
+  const response = await fetch(`${API_BASE}/exif/${sessionId}`);
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.exif;
+}
+
+export async function updateExif(
+  sessionId: string,
+  dateTaken: string | null
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/exif`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      session_id: sessionId,
+      date_taken: dateTaken,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error("Failed to update EXIF");
+  }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, X, RotateCcw, RotateCw, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { estimateBase64FileSize, formatFileSize, formatDimensions } from "@/lib/utils";
 import type { CroppedImage } from "@/types";
 
 interface LightboxProps {
@@ -164,12 +165,18 @@ export function Lightbox({
         </Button>
       </div>
 
-      {/* Footer with rotation info */}
-      {currentImage.rotationApplied !== 0 && (
-        <div className="p-2 text-center text-white/70 text-sm">
-          Rotated {currentImage.rotationApplied}°
-        </div>
-      )}
+      {/* Footer with image info */}
+      <div className="p-2 text-center text-white/70 text-sm flex items-center justify-center gap-3">
+        <span>{formatDimensions(currentImage.width, currentImage.height)}</span>
+        <span>·</span>
+        <span>{formatFileSize(estimateBase64FileSize(currentImage.data))}</span>
+        {currentImage.rotationApplied !== 0 && (
+          <>
+            <span>·</span>
+            <span>Rotated {currentImage.rotationApplied}°</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ class Session:
     directory: Path
     files: dict[str, dict[str, Any]] = field(default_factory=dict)
     cropped_images: list[Path] = field(default_factory=list)
+    exif_data: dict[str, dict[str, Any]] = field(default_factory=dict)  # filename -> exif
 
     @property
     def age_seconds(self) -> float:

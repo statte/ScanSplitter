@@ -40,6 +40,7 @@ export interface CroppedImage {
   rotationApplied: number;
   name: string; // custom name for download
   source: ImageSource;
+  dateTaken: string | null; // YYYY-MM-DD format for EXIF
 }
 
 // Detection settings

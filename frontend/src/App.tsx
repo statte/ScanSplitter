@@ -1,13 +1,17 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { HelpCircle } from "lucide-react";
 import { FileUpload } from "@/components/FileUpload";
 import { FileTabs } from "@/components/FileTabs";
 import { ImageCanvas } from "@/components/ImageCanvas";
 import { PageNavigator } from "@/components/PageNavigator";
 import { ScanNavigator } from "@/components/ScanNavigator";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { ExifEditor } from "@/components/ExifEditor";
 import { ResultsGallery } from "@/components/ResultsGallery";
 import { Toast, type ToastType } from "@/components/Toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
+import { Button } from "@/components/ui/button";
 import { uploadFile, detectBoxes, cropImages, exportZip, exportLocal, getImageUrl, FileConflictError } from "@/lib/api";
 import { generateName } from "@/lib/naming";
 import type { UploadedFile, BoundingBox, CroppedImage, DetectionSettings, NamingPattern } from "@/types";
@@ -57,6 +61,9 @@ function App() {
     files: string[];
   } | null>(null);
 
+  // Keyboard shortcuts dialog state
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
   const showToast = useCallback((message: string, type: ToastType = "success") => {
     setToast({ message, type });
   }, []);
@@ -68,6 +75,23 @@ function App() {
 
   // Get active file
   const activeFile = files[activeFileIndex] ?? null;
+
+  // Global keyboard shortcut (? for help)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Skip if in input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      if (e.key === "?" || (e.key === "/" && e.shiftKey)) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Compute images for current scan vs all
   const currentScanImages = useMemo(() => {
@@ -203,6 +227,25 @@ function App() {
     );
   }, []);
 
+  // Handle image date change
+  const handleImageDateChange = useCallback((id: string, date: string | null) => {
+    setCroppedImages((prev) =>
+      prev.map((img) => (img.id === id ? { ...img, dateTaken: date } : img))
+    );
+  }, []);
+
+  // Apply date to all images
+  const handleApplyDateToAll = useCallback((date: string | null) => {
+    setCroppedImages((prev) => {
+      if (prev.length === 0) {
+        showToast("No photos to apply date to", "error");
+        return prev;
+      }
+      showToast(`Applied date to ${prev.length} photo${prev.length !== 1 ? "s" : ""}`);
+      return prev.map((img) => ({ ...img, dateTaken: date }));
+    });
+  }, [showToast]);
+
   // Apply naming pattern to all images
   const applyNamingPattern = useCallback(() => {
     setCroppedImages((prev) => {
@@ -312,10 +355,11 @@ function App() {
         // Calculate next global index for naming
         const nextIndex = filtered.length + 1;
 
-        // Add source tracking and names to new images
+        // Add source tracking, names, and date to new images
         const imagesWithSource = result.map((img, idx) => ({
           ...img,
           name: `photo_${nextIndex + idx}`,
+          dateTaken: null as string | null,
           source: {
             fileIndex: activeFileIndex,
             filename: activeFile.filename,
@@ -339,11 +383,12 @@ function App() {
     if (!activeFile || croppedImages.length === 0) return;
     setIsExporting(true);
     try {
-      // Build image data array with current rotations applied
+      // Build image data array with dates
       const images = croppedImages.map((img) => ({
         id: img.id,
         data: img.data,
         name: img.name,
+        date_taken: img.dateTaken,
       }));
       const blob = await exportZip(activeFile.sessionId, "jpeg", 85, images);
 
@@ -372,11 +417,12 @@ function App() {
 
     setIsExporting(true);
     try {
-      // Build image data array with current rotations applied
+      // Build image data array with dates
       const images = croppedImages.map((img) => ({
         id: img.id,
         data: img.data,
         name: img.name,
+        date_taken: img.dateTaken,
       }));
       const result = await exportLocal(
         activeFile.sessionId,
@@ -436,11 +482,21 @@ function App() {
     <div className="h-screen flex flex-col p-4 overflow-hidden">
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
-        <header className="mb-4 flex-shrink-0">
-          <h1 className="text-xl font-bold">ScanSplitter</h1>
-          <p className="text-sm text-muted-foreground">
-            Detect, adjust, and extract photos from scanned images
-          </p>
+        <header className="mb-4 flex-shrink-0 flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-bold">ScanSplitter</h1>
+            <p className="text-sm text-muted-foreground">
+              Detect, adjust, and extract photos from scanned images
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowShortcuts(true)}
+            title="Keyboard shortcuts (?)"
+          >
+            <HelpCircle className="w-5 h-5" />
+          </Button>
         </header>
 
         {/* Main layout */}
@@ -456,6 +512,11 @@ function App() {
               isDetecting={isDetecting}
               isCropping={isCropping}
               hasBoxes={(activeFile?.boxes.length ?? 0) > 0}
+            />
+            <ExifEditor
+              sessionId={activeFile?.sessionId ?? null}
+              imageCount={croppedImages.length}
+              onApplyToAll={handleApplyDateToAll}
             />
           </div>
 
@@ -505,6 +566,7 @@ function App() {
               onExport={handleExport}
               onExportLocal={handleExportLocal}
               onNameChange={handleImageNameChange}
+              onDateChange={handleImageDateChange}
               onRotate={handleImageRotate}
               isExporting={isExporting}
               outputDirectory={outputDirectory}
@@ -534,6 +596,11 @@ function App() {
           onConfirm={handleOverwriteConfirm}
           onCancel={() => setOverwriteDialog(null)}
         />
+      )}
+
+      {/* Keyboard shortcuts dialog */}
+      {showShortcuts && (
+        <KeyboardShortcutsDialog onClose={() => setShowShortcuts(false)} />
       )}
     </div>
   );

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Download, FolderDown, RotateCcw, RotateCw, Expand, Wand2 } from "lucide-react";
+import { Download, FolderDown, RotateCcw, RotateCw, Expand, Wand2, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Lightbox } from "@/components/Lightbox";
 import { NamingPatternInput } from "@/components/NamingPatternInput";
+import { estimateBase64FileSize, formatFileSize, formatDimensions } from "@/lib/utils";
 import type { CroppedImage, NamingPattern } from "@/types";
 
 interface ResultsGalleryProps {
@@ -18,6 +19,7 @@ interface ResultsGalleryProps {
   onExport: () => void;
   onExportLocal: () => void;
   onNameChange: (id: string, name: string) => void;
+  onDateChange: (id: string, date: string | null) => void;
   onRotate: (id: string, direction: "left" | "right") => void;
   isExporting: boolean;
   outputDirectory: string;
@@ -35,6 +37,7 @@ export function ResultsGallery({
   onExport,
   onExportLocal,
   onNameChange,
+  onDateChange,
   onRotate,
   isExporting,
   outputDirectory,
@@ -177,6 +180,10 @@ export function ResultsGallery({
                       {image.rotationApplied}°
                     </div>
                   )}
+                  {/* Hover overlay with image info */}
+                  <div className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                    {formatDimensions(image.width, image.height)} · {formatFileSize(estimateBase64FileSize(image.data))}
+                  </div>
                   {/* Hover overlay with expand icon */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center pointer-events-none">
                     <Expand className="w-8 h-8 text-white opacity-0 group-hover:opacity-70 transition-opacity" />
@@ -239,6 +246,16 @@ export function ResultsGallery({
                   >
                     <Download className="w-3 h-3" />
                   </Button>
+                </div>
+                <div className="flex gap-1 items-center">
+                  <Calendar className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <Input
+                    type="date"
+                    value={image.dateTaken ?? ""}
+                    onChange={(e) => onDateChange(image.id, e.target.value || null)}
+                    className="h-7 text-xs flex-1"
+                    title="Photo date (embedded in JPEG export)"
+                  />
                 </div>
               </div>
             ))}
