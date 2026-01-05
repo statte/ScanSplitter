@@ -42,7 +42,8 @@ export async function detectBoxes(
   page: number,
   minArea: number,
   maxArea: number,
-  detectionMode: "classic" | "u2net" = "classic"
+  detectionMode: "classic" | "u2net" = "classic",
+  u2netLite: boolean = true
 ): Promise<{ boxes: BoundingBox[]; imageUrl: string }> {
   const response = await fetch(`${API_BASE}/detect`, {
     method: "POST",
@@ -53,6 +54,7 @@ export async function detectBoxes(
       min_area: minArea,
       max_area: maxArea,
       detection_mode: detectionMode,
+      u2net_lite: u2netLite,
     }),
   });
 

@@ -41,6 +41,7 @@ function App() {
     autoRotate: true,
     autoDetect: true,
     detectionMode: "classic",
+    u2netLite: true,
   });
 
   // Loading states
@@ -123,7 +124,8 @@ function App() {
         page,
         settings.minArea,
         settings.maxArea,
-        settings.detectionMode
+        settings.detectionMode,
+        settings.u2netLite
       );
       // Update with detected boxes
       setFiles((prev) =>
@@ -141,7 +143,7 @@ function App() {
         )
       );
     }
-  }, [settings.minArea, settings.maxArea, settings.detectionMode]);
+  }, [settings.minArea, settings.maxArea, settings.detectionMode, settings.u2netLite]);
 
   // Handle file upload (multiple files)
   const handleUpload = useCallback(async (filesToUpload: File[]) => {
@@ -324,7 +326,8 @@ function App() {
         activeFile.currentPage,
         settings.minArea,
         settings.maxArea,
-        settings.detectionMode
+        settings.detectionMode,
+        settings.u2netLite
       );
       handleBoxesChange(result.boxes);
     } catch (error) {

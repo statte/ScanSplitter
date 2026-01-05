@@ -115,6 +115,26 @@ export function SettingsPanel({
           </p>
         </div>
 
+        {settings.detectionMode === "u2net" && (
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="u2net-lite"
+              checked={settings.u2netLite}
+              onChange={(e) =>
+                onSettingsChange({ ...settings, u2netLite: e.target.checked })
+              }
+              className="rounded"
+            />
+            <label htmlFor="u2net-lite" className="text-sm">
+              Use lite model (faster)
+            </label>
+            <p className="text-xs text-muted-foreground ml-auto">
+              {settings.u2netLite ? "5MB" : "176MB"}
+            </p>
+          </div>
+        )}
+
         <div className="space-y-2 pt-2">
           <Button
             onClick={onDetect}
